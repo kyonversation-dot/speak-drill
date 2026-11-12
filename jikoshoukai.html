@@ -84,11 +84,9 @@ let showRo = store.get('lila-ro') !== '0';
 $('#roBtn').classList.toggle('on', showRo);
 $('#roBtn').onclick = () => { showRo = !showRo; store.set('lila-ro', showRo ? '1' : '0'); $('#roBtn').classList.toggle('on', showRo); if(!talking) render(); };
 $('#slowBtn').classList.toggle('on', slow);
-$('#slowBtn').onclick = () => { slow = !slow; store.set('lila-slow', slow ? '1' : '0'); // ローマ字はいつも出す（ひらがながまだ読めない＝キヨ 11/4）。上のボタンで消せる
-let showRo = store.get('lila-ro') !== '0';
-$('#roBtn').classList.toggle('on', showRo);
-$('#roBtn').onclick = () => { showRo = !showRo; store.set('lila-ro', showRo ? '1' : '0'); $('#roBtn').classList.toggle('on', showRo); if(!talking) render(); };
-$('#slowBtn').classList.toggle('on', slow); };
+$('#slowBtn').onclick = () => { slow = !slow; store.set('lila-slow', slow ? '1' : '0'); $('#slowBtn').classList.toggle('on', slow); };
+// 3回目からはローマ字なし（キヨ 11/12）＝その文が出るのが3回目以上なら、答えも質問もローマ字を出さない
+const RO_UNTIL = 2;
 
 // ---------- my self-introduction: one sentence at a time, then put together ----------
 const L = [
@@ -183,7 +181,7 @@ function stars(){
 function lineHTML(l, opts){
   const hide = opts.hide;
   return `<div class="ln ${opts.isNewHere ? 'new' : ''}">
-    ${l.cue ? `<div class="cue">🔊 ${l.cue}${showRo ? ` <span style="font-family:Arial,sans-serif;opacity:.8">(${l.cro})</span>` : ''}</div>` : ''}
+    ${l.cue ? `<div class="cue">🔊 ${l.cue}${showRo && opts.ro !== false ? ` <span style="font-family:Arial,sans-serif;opacity:.8">(${l.cro})</span>` : ''}</div>` : ''}
     ${hide ? `<div class="blank">・・・</div><div class="en">💬 ${l.en}</div>` : `<div class="jp">${l.jp}</div>`}
     ${!hide && showRo && opts.ro !== false ? `<div class="ro">${l.ro}</div>` : ''}
     ${!hide && opts.en ? `<div class="en">${l.en}</div>` : ''}
@@ -204,6 +202,7 @@ function render(){
         <li>Press <b>▶ My recording</b> to hear your conversation. Not happy? Do it again!</li>
         <li>Press <b>Next ▶</b>.</li>
       </ol>
+      <p>The romaji helps you the first two times. <b>From the third time, it goes away</b> — say it on your own!</p>
       <p style="color:var(--sub)">Your phone will ask to use the microphone — press <b>Allow</b>. Your recordings stay on your phone.</p></div>
       <div class="row"><button class="btn main" id="go">Start ▶</button></div>`;
     $('#go').onclick = () => go(0);
@@ -218,8 +217,11 @@ function render(){
     listen = specsFor([l]); talkLines = [l];
   } else if(s.kind === 'together'){
     const ls = L.slice(0, s.n);
-    head = `<p class="step">Put it together</p><h2>Now say sentences 1 → ${s.n}</h2>`;
-    lines = ls.map((l, i) => lineHTML(l, { isNewHere:i === s.n - 1 })).join('');
+    // その文が何回目か＝1文ずつの回(1)＋それまでの「まとめ」の回
+    const seen = i => i === 0 ? s.n : s.n - i + 1;
+    const noRo = ls.some((_, i) => seen(i) > RO_UNTIL);
+    head = `<p class="step">Put it together</p><h2>Now say sentences 1 → ${s.n}</h2>${noRo && showRo ? '<p class="step">No romaji for sentences you have said twice. You can do it! 💪</p>' : ''}`;
+    lines = ls.map((l, i) => lineHTML(l, { isNewHere:i === s.n - 1, ro:seen(i) <= RO_UNTIL })).join('');
     listen = specsFor(ls); talkLines = ls;
   } else {
     head = `<p class="step">Last one! 🏆</p><h2>Say it all <u>without looking</u></h2>`;
