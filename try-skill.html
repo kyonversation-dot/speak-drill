@@ -48,6 +48,7 @@
   .slot { display:inline-block; border:2px dashed var(--blue); border-radius:8px; padding:0 8px; margin:0 2px; color:var(--blue); font-family:Arial,sans-serif; font-size:.8em; line-height:1.4; }
   .about { background:var(--tint); border-radius:12px; padding:10px 12px; margin-top:12px; }
   .field { display:flex; flex-direction:column; gap:2px; margin:8px 0; font-size:.95rem; color:var(--sub); }
+  .field small { font-size:.85rem; }
   .field input, .field select { font-family:inherit; font-size:1.1rem; padding:8px 10px; border-radius:10px; border:2px solid var(--line); background:var(--card); color:var(--ink); }
 </style>
 </head>
@@ -143,7 +144,8 @@ function slotValue(name, kind){
   const example = sl.example || (sl.choices && sl.choices[0] && sl.choices[0].jp) || null;
   if(!v) return kind === 'say' ? example : null;
   if(sl.choices){ const c = sl.choices[+v]; if(!c) return kind === 'say' ? example : null; return kind === 'say' ? c.jp : (c[kind] || c.jp); }
-  if(kind === 'say') return isKana(v) ? v : example;  // a Japanese voice can't read a name typed in English letters
+  // a name typed in English letters: a Japanese voice can't say it, so leave a gap for the student (never someone else's name)
+  if(kind === 'say') return isKana(v) ? v : '';
   return v;
 }
 // text with blanks → safe HTML
@@ -318,7 +320,7 @@ function slotsHTML(){
         <option value="">— choose —</option>
         ${sl.choices.map((c, i) => `<option value="${i}" ${String(vals[name]) === String(i) ? 'selected' : ''}>${esc(c.jp)}${c.en ? ' · ' + esc(c.en) : ''}</option>`).join('')}
       </select></label>`;
-    return `<label class="field"><span>${label}</span><input data-slot="${esc(name)}" value="${esc(vals[name] || '')}" autocomplete="off" placeholder="${esc(name)}"></label>`;
+    return `<label class="field"><span>${label}</span><input data-slot="${esc(name)}" value="${esc(vals[name] || '')}" autocomplete="off" placeholder="${esc(name)}"><small>In katakana if you can${sl.example ? ` (e.g. ${esc(sl.example)})` : ''} — then the voice can say it.</small></label>`;
   }).join('');
   return `<div class="about"><p><b>About you</b> — put in your own words. You can leave a box empty and just say it.</p>${fields}</div>`;
 }
