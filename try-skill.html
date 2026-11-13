@@ -45,6 +45,10 @@
   .intro p, .intro li { margin:6px 0; }
   .big { font-size:2rem; text-align:center; margin:6px 0; }
   .warn { background:var(--tint); border-radius:12px; padding:10px 12px; font-size:.95rem; }
+  .slot { display:inline-block; border:2px dashed var(--blue); border-radius:8px; padding:0 8px; margin:0 2px; color:var(--blue); font-family:Arial,sans-serif; font-size:.8em; line-height:1.4; }
+  .about { background:var(--tint); border-radius:12px; padding:10px 12px; margin-top:12px; }
+  .field { display:flex; flex-direction:column; gap:2px; margin:8px 0; font-size:.95rem; color:var(--sub); }
+  .field input, .field select { font-family:inherit; font-size:1.1rem; padding:8px 10px; border-radius:10px; border:2px solid var(--line); background:var(--card); color:var(--ink); }
 </style>
 </head>
 <body>
@@ -61,27 +65,57 @@ const DRILL = /*DRILL*/{
   "titleEn": "Self-introduction",
   "goal": "your self-introduction",
   "romajiTimes": 2,
+  "slots": {
+    "Name": {
+      "en": "your name"
+    },
+    "Country": {
+      "en": "your country",
+      "choices": [
+        {
+          "jp": "ニュージーランド",
+          "ro": "nyūjīrando",
+          "en": "New Zealand"
+        },
+        {
+          "jp": "オーストラリア",
+          "ro": "ōsutoraria",
+          "en": "Australia"
+        },
+        {
+          "jp": "アメリカ",
+          "ro": "amerika",
+          "en": "the USA"
+        },
+        {
+          "jp": "イギリス",
+          "ro": "igirisu",
+          "en": "the UK"
+        }
+      ]
+    }
+  },
   "lines": [
     {
       "cue": "おなまえは なんですか。",
       "cueRo": "onamae wa nan desu ka.",
-      "jp": "はじめまして。わたしは エマです。",
-      "ro": "hajimemashite. watashi wa Ema desu.",
-      "en": "Nice to meet you. I'm Emma."
+      "jp": "はじめまして。わたしは {Name}です。",
+      "ro": "hajimemashite. watashi wa {Name} desu.",
+      "en": "Nice to meet you. I'm {Name}."
     },
     {
       "cue": "なにじんですか。",
       "cueRo": "nanijin desu ka.",
-      "jp": "ニュージーランドじんです。",
-      "ro": "nyūjīrando-jin desu.",
-      "en": "I'm a New Zealander."
+      "jp": "{Country}じんです。",
+      "ro": "{Country}-jin desu.",
+      "en": "I'm a person from {Country}."
     },
     {
       "cue": "どこから きましたか。",
       "cueRo": "doko kara kimashita ka.",
-      "jp": "ニュージーランドから きました。",
-      "ro": "nyūjīrando kara kimashita.",
-      "en": "I'm from New Zealand."
+      "jp": "{Country}から きました。",
+      "ro": "{Country} kara kimashita.",
+      "en": "I came from {Country}."
     },
     {
       "jp": "どうぞ よろしく。",
@@ -94,6 +128,31 @@ const DRILL = /*DRILL*/{
 const $ = s => document.querySelector(s);
 const store = { get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }, set(k, v){ try { localStorage.setItem(k, v); } catch(e){} } };
 const L = DRILL.lines;
+
+// ---------- blanks the student fills in: {Name}, {Country} ... ----------
+const SLOTS = DRILL.slots || {};
+const SLOT_RE = /\{([A-Za-z0-9_]+)\}/g;
+const slotKey = 'drill-slots-' + (DRILL.titleEn || DRILL.title || '');
+let vals = {}; try { vals = JSON.parse(store.get(slotKey) || '{}') || {}; } catch(e){ vals = {}; }
+const isKana = s => /^[぀-ヿ一-鿿ー\s・]+$/.test(s);
+// the value of a blank for one kind of text: 'jp' | 'ro' | 'en' | 'say' (null = leave the blank)
+function slotValue(name, kind){
+  const v = vals[name], sl = SLOTS[name] || {};
+  if(!v) return null;
+  if(sl.choices){ const c = sl.choices[+v]; if(!c) return null; return kind === 'say' ? c.jp : (c[kind] || c.jp); }
+  if(kind === 'say') return isKana(v) ? v : null;  // a Japanese voice can't read a name typed in English letters
+  return v;
+}
+// text with blanks → safe HTML
+function fillHTML(str, kind){
+  return esc(str).replace(SLOT_RE, (m, name) => {
+    const v = slotValue(name, kind);
+    if(v) return `<b>${esc(v)}</b>`;
+    if(kind === 'en') return `<i>(${esc((SLOTS[name] || {}).en || name)})</i>`;
+    return `<span class="slot">${esc(name)}</span>`;
+  });
+}
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
 const HAS_RO = L.some(l => l.ro);
 const RO_UNTIL = DRILL.romajiTimes == null ? 2 : DRILL.romajiTimes;  // 0 = romaji every time
 document.title = DRILL.titleEn ? 'Speaking Practice · ' + DRILL.titleEn : 'Speaking Practice';
@@ -135,8 +194,22 @@ function speakOnce(text, who){
     synth.speak(u);
   });
 }
+// a sentence with blanks: say the filled parts, and leave a short gap where the student says their own word
 async function speak(text, who){
   if(!synth) return;
+  const parts = String(text).split(SLOT_RE);  // even = text, odd = blank name
+  let buf = '';
+  for(let i = 0; i < parts.length; i++){
+    if(i % 2 === 0){ buf += parts[i]; continue; }
+    const v = slotValue(parts[i], 'say');
+    if(v){ buf += v; continue; }
+    if(buf.trim()) await speakPart(buf, who);
+    buf = '';
+    await wait(slow ? 1400 : 1000);
+  }
+  if(buf.trim()) await speakPart(buf, who);
+}
+async function speakPart(text, who){
   for(let tries = 0; tries < 3; tries++){
     const r = await speakOnce(text, who);
     if(!r || !r.failed) return;
@@ -214,18 +287,31 @@ function setTalkUI(on){
 function msg(t, good){ const m = $('#msg'); if(m){ m.textContent = t; m.classList.toggle('good', !!good); } }
 
 // ---------- screens ----------
-const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
 function stars(){
   $('#stars').innerHTML = STEPS.map((s, i) => `<span class="${recs[i] ? 'done' : ''}">${s.kind === 'final' ? '🏆' : '⭐'}</span>`).join('');
 }
 function lineHTML(l, opts){
   const hide = opts.hide, ro = showRo && opts.ro !== false;
   return `<div class="ln ${opts.isNewHere ? 'new' : ''}">
-    ${l.cue ? `<div class="cue">🔊 ${esc(l.cue)}${ro && l.cueRo ? ` <span style="font-family:Arial,sans-serif;opacity:.8">(${esc(l.cueRo)})</span>` : ''}</div>` : ''}
-    ${hide ? `<div class="blank">・・・</div><div class="en">💬 ${esc(l.en)}</div>` : `<div class="jp">${esc(l.jp)}</div>`}
-    ${!hide && ro && l.ro ? `<div class="ro">${esc(l.ro)}</div>` : ''}
-    ${!hide && opts.en && l.en ? `<div class="en">${esc(l.en)}</div>` : ''}
+    ${l.cue ? `<div class="cue">🔊 ${fillHTML(l.cue, 'jp')}${ro && l.cueRo ? ` <span style="font-family:Arial,sans-serif;opacity:.8">(${fillHTML(l.cueRo, 'ro')})</span>` : ''}</div>` : ''}
+    ${hide ? `<div class="blank">・・・</div><div class="en">💬 ${fillHTML(l.en, 'en')}</div>` : `<div class="jp">${fillHTML(l.jp, 'jp')}</div>`}
+    ${!hide && ro && l.ro ? `<div class="ro">${fillHTML(l.ro, 'ro')}</div>` : ''}
+    ${!hide && opts.en && l.en ? `<div class="en">${fillHTML(l.en, 'en')}</div>` : ''}
   </div>`;
+}
+// the "about you" box on the first screen: one field per blank used in the sentences
+function slotsHTML(){
+  const used = [...new Set(L.flatMap(l => [l.cue, l.jp, l.ro, l.en].join(' ').match(SLOT_RE) || []).map(m => m.slice(1, -1)))];
+  if(!used.length) return '';
+  const fields = used.map(name => {
+    const sl = SLOTS[name] || {}, label = esc(sl.en ? sl.en.charAt(0).toUpperCase() + sl.en.slice(1) : name);
+    if(sl.choices) return `<label class="field"><span>${label}</span><select data-slot="${esc(name)}">
+        <option value="">— choose —</option>
+        ${sl.choices.map((c, i) => `<option value="${i}" ${String(vals[name]) === String(i) ? 'selected' : ''}>${esc(c.jp)}${c.en ? ' · ' + esc(c.en) : ''}</option>`).join('')}
+      </select></label>`;
+    return `<label class="field"><span>${label}</span><input data-slot="${esc(name)}" value="${esc(vals[name] || '')}" autocomplete="off" placeholder="${esc(name)}"></label>`;
+  }).join('');
+  return `<div class="about"><p><b>About you</b> — put in your own words. You can leave a box empty and just say it.</p>${fields}</div>`;
 }
 function itemsFor(lines){ const out = []; lines.forEach(l => { if(l.cue) out.push([l.cue, 'q']); out.push([l.jp, 'a']); }); return out; }
 
@@ -245,8 +331,12 @@ function render(){
       </ol>
       ${HAS_RO && RO_UNTIL > 0 ? `<p>The romaji helps you the first ${RO_UNTIL === 1 ? 'time' : RO_UNTIL + ' times'}. <b>After that, it goes away</b> — say it on your own!</p>` : ''}
       <p style="color:var(--sub)">Your phone will ask to use the microphone — press <b>Allow</b>. Your recordings stay on your phone.</p>
-      ${noVoice ? '<p class="warn">If you can\'t hear the Japanese voice, open this page in Chrome or Safari, and check that your phone\'s volume is up.</p>' : ''}</div>
+      ${noVoice ? '<p class="warn">If you can\'t hear the Japanese voice, open this page in Chrome or Safari, and check that your phone\'s volume is up.</p>' : ''}
+      ${slotsHTML()}</div>
       <div class="row"><button class="btn main" id="go">Start ▶</button></div>`;
+    document.querySelectorAll('[data-slot]').forEach(el => {
+      el.oninput = el.onchange = () => { vals[el.dataset.slot] = el.value.trim(); store.set(slotKey, JSON.stringify(vals)); };
+    });
     $('#go').onclick = () => go(0);
     return;
   }
@@ -324,7 +414,7 @@ function finish(){
 }
 $('#restart').onclick = () => { stopAll(); stopTalk(); at = -1; render(); };
 render();
-if(synth) synth.addEventListener && synth.addEventListener('voiceschanged', () => { if(at < 0) render(); });
+if(synth) synth.addEventListener && synth.addEventListener('voiceschanged', () => { if(at < 0 && !document.activeElement.closest('.about')) render(); });
 </script>
 </body>
 </html>
