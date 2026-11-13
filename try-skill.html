@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speaking Practice</title>
+<style>
+  :root { --ink:#2b2622; --sub:#6b6058; --bg:#faf6f0; --card:#fff; --accent:#7a2e2e; --blue:#4f7489; --ok:#2e7d4f; --rec:#c0392b; --line:#e6ddd2; --tint:#f6ebe3; }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --ink:#f3ece6; --sub:#b3a69c; --bg:#1c1816; --card:#262120; --accent:#e08a7a; --blue:#8fb6cc; --ok:#6fcf97; --rec:#ff7b6b; --line:#3a3230; --tint:#3a2724; } }
+  :root[data-theme="dark"]{ --ink:#f3ece6; --sub:#b3a69c; --bg:#1c1816; --card:#262120; --accent:#e08a7a; --blue:#8fb6cc; --ok:#6fcf97; --rec:#ff7b6b; --line:#3a3230; --tint:#3a2724; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"Hiragino Sans","Yu Gothic UI","Meiryo","Noto Sans JP",sans-serif; line-height:1.6; }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); padding:8px 16px; }
+  .bar { max-width:640px; margin:0 auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .bar b { color:var(--accent); }
+  .bar .sp { flex:1; }
+  .tool { font-family:inherit; font-size:.9rem; padding:4px 10px; border-radius:18px; border:2px solid var(--blue); background:var(--card); color:var(--blue); cursor:pointer; }
+  .tool.on { background:var(--blue); color:#fff; }
+  .stars { max-width:640px; margin:6px auto 0; display:flex; gap:4px; justify-content:center; font-size:1.2rem; letter-spacing:.05em; flex-wrap:wrap; }
+  .stars span { opacity:.25; } .stars span.done { opacity:1; }
+  main { max-width:640px; margin:0 auto; padding:18px 16px 60px; }
+  .card { background:var(--card); border-radius:16px; padding:20px 18px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .step { color:var(--sub); font-size:.95rem; margin:0; text-align:center; }
+  h2 { text-align:center; margin:2px 0 14px; font-size:1.3rem; }
+  .lines { margin:0 0 6px; }
+  .ln { padding:8px 10px; border-radius:12px; margin:6px 0; }
+  .ln.new { background:var(--tint); }
+  .ln.turn { outline:3px solid var(--rec); }
+  .ln .cue { color:var(--blue); font-size:.95rem; }
+  .ln .jp { font-size:clamp(1.35rem,5.5vw,1.8rem); line-height:1.45; }
+  .ln .ro { color:var(--blue); font-family:Arial,sans-serif; font-size:1rem; }
+  .ln .en { color:var(--sub); font-size:.95rem; }
+  .ln .blank { font-size:1.5rem; color:var(--line); letter-spacing:.3em; }
+  .row { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:14px; }
+  .btn { font-family:inherit; font-size:1.05rem; padding:10px 16px; border-radius:24px; border:2px solid var(--blue); background:var(--card); color:var(--blue); cursor:pointer; text-decoration:none; }
+  .btn:disabled { opacity:.4; cursor:default; }
+  .btn.main { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .btn.rec { border-color:var(--rec); color:var(--rec); font-size:1.15rem; padding:12px 22px; }
+  .btn.rec.on { background:var(--rec); color:#fff; animation:pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity:.7; } }
+  .msg { text-align:center; color:var(--sub); margin:10px 0 0; min-height:1.4em; }
+  .msg.good { color:var(--ok); font-weight:bold; }
+  .intro p, .intro li { margin:6px 0; }
+  .big { font-size:2rem; text-align:center; margin:6px 0; }
+  .warn { background:var(--tint); border-radius:12px; padding:10px 12px; font-size:.95rem; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar"><b>🎤 Speaking practice</b><span class="sp"></span><button class="tool" id="roBtn">abc Romaji</button><button class="tool" id="slowBtn">🐢 Slow</button><button class="tool" id="restart">↺ Start</button></div>
+  <div class="stars" id="stars"></div>
+</header>
+<main><div class="card" id="card"></div></main>
+
+<script>
+// ===== The drill content. make_drill.py replaces everything between the two markers. =====
+const DRILL = /*DRILL*/{
+  "title": "じこしょうかい",
+  "titleEn": "Self-introduction",
+  "goal": "your self-introduction",
+  "romajiTimes": 2,
+  "lines": [
+    {
+      "cue": "おなまえは なんですか。",
+      "cueRo": "onamae wa nan desu ka.",
+      "jp": "はじめまして。わたしは エマです。",
+      "ro": "hajimemashite. watashi wa Ema desu.",
+      "en": "Nice to meet you. I'm Emma."
+    },
+    {
+      "cue": "なにじんですか。",
+      "cueRo": "nanijin desu ka.",
+      "jp": "ニュージーランドじんです。",
+      "ro": "nyūjīrando-jin desu.",
+      "en": "I'm a New Zealander."
+    },
+    {
+      "cue": "どこから きましたか。",
+      "cueRo": "doko kara kimashita ka.",
+      "jp": "ニュージーランドから きました。",
+      "ro": "nyūjīrando kara kimashita.",
+      "en": "I'm from New Zealand."
+    },
+    {
+      "jp": "どうぞ よろしく。",
+      "ro": "dōzo yoroshiku.",
+      "en": "Pleased to meet you."
+    }
+  ]
+}/*END*/;
+
+const $ = s => document.querySelector(s);
+const store = { get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }, set(k, v){ try { localStorage.setItem(k, v); } catch(e){} } };
+const L = DRILL.lines;
+const HAS_RO = L.some(l => l.ro);
+const RO_UNTIL = DRILL.romajiTimes == null ? 2 : DRILL.romajiTimes;  // 0 = romaji every time
+document.title = DRILL.titleEn ? 'Speaking Practice · ' + DRILL.titleEn : 'Speaking Practice';
+
+// ---------- voice: the phone's own Japanese voice ----------
+let slow = store.get('drill-slow') === '1', playId = 0;
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const synth = window.speechSynthesis;
+let jaVoices = [];
+function loadVoices(){
+  if(!synth) return;
+  jaVoices = synth.getVoices().filter(v => /^ja/i.test(v.lang));
+  // Natural / online voices sound better: put them first
+  const score = v => (/natural|online|enhanced|premium|google|siri/i.test(v.name) ? 0 : 1);
+  jaVoices.sort((a, b) => score(a) - score(b));
+}
+if(synth){ loadVoices(); synth.onvoiceschanged = loadVoices; }
+const MALE = /otoya|ichiro|keita|hattori|daichi|naoki/i;
+const badVoices = new Set();  // voices that failed on this device are skipped
+function voiceFor(who){
+  const ok = jaVoices.filter(v => !badVoices.has(v.name));
+  if(!ok.length) return null;
+  if(who === 'q'){ const m = ok.find(v => MALE.test(v.name)); if(m) return m; }
+  if(who === 'a'){ const f = ok.find(v => !MALE.test(v.name)); if(f) return f; }
+  return ok[0];
+}
+function speakOnce(text, who){
+  return new Promise(res => {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ja-JP';
+    const v = voiceFor(who); if(v) u.voice = v;
+    const sameVoice = v && voiceFor('q') === voiceFor('a');
+    u.pitch = sameVoice ? (who === 'q' ? 0.8 : 1.15) : 1;
+    u.rate = slow ? 0.6 : 0.85;
+    let done = false; const end = r => { if(!done){ done = true; res(r); } };
+    u.onend = () => end('ok');
+    u.onerror = e => end(/interrupted|canceled/.test(e.error) ? 'stopped' : { failed:v });
+    setTimeout(() => end('ok'), 3000 + text.length * (slow ? 450 : 300));  // in case the browser never says "ended"
+    synth.speak(u);
+  });
+}
+async function speak(text, who){
+  if(!synth) return;
+  for(let tries = 0; tries < 3; tries++){
+    const r = await speakOnce(text, who);
+    if(!r || !r.failed) return;
+    badVoices.add(r.failed.name);  // try the next voice
+  }
+}
+function stopAll(){ playId++; if(synth) synth.cancel(); if(curAudio){ curAudio.pause(); curAudio = null; } }
+let curAudio = null;
+async function play(items){
+  stopAll(); const id = playId;
+  for(const [text, who] of items){ if(id !== playId) return; await speak(text, who); await wait(350); }
+}
+
+let showRo = HAS_RO && store.get('drill-ro') !== '0';
+if(!HAS_RO) $('#roBtn').hidden = true;
+$('#roBtn').classList.toggle('on', showRo);
+$('#roBtn').onclick = () => { showRo = !showRo; store.set('drill-ro', showRo ? '1' : '0'); $('#roBtn').classList.toggle('on', showRo); if(!talking) render(); };
+$('#slowBtn').classList.toggle('on', slow);
+$('#slowBtn').onclick = () => { slow = !slow; store.set('drill-slow', slow ? '1' : '0'); $('#slowBtn').classList.toggle('on', slow); };
+
+// ---------- steps: learn 1, learn 2, together 1-2, learn 3, together 1-3, ... , final (all, no looking) ----------
+const STEPS = [];
+L.forEach((_, k) => { STEPS.push({ kind:'learn', k }); if(k > 0) STEPS.push({ kind:'together', n:k + 1 }); });
+STEPS.push({ kind:'final' });
+const STEP_COUNT = STEPS.length;
+let at = -1, recs = {}, peek = false, finalRec = null;
+
+// ---------- recording: the microphone hears the question from the speaker and the student's answer ----------
+let stream = null, mediaRec = null, chunks = [], talking = false, turnDone = null;
+function pickMime(){
+  if(!window.MediaRecorder) return null;
+  for(const m of ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']) if(MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+  return '';
+}
+async function setupRec(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || pickMime() === null){ msg('Recording does not work here. Try Chrome or Safari on your phone.'); return false; }
+  try { stream = stream || await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:true } }); }
+  catch(e){ msg('Please allow the microphone, then press 🎤 again.'); return false; }
+  return true;
+}
+async function talk(lines, onDone){
+  stopAll();
+  if(!await setupRec()) return;
+  const mime = pickMime(); chunks = [];
+  mediaRec = mime ? new MediaRecorder(stream, { mimeType:mime }) : new MediaRecorder(stream);
+  mediaRec.ondataavailable = e => { if(e.data.size) chunks.push(e.data); };
+  const stopped = new Promise(r => mediaRec.onstop = r);
+  mediaRec.start(); talking = true; setTalkUI(true);
+  const lns = [...document.querySelectorAll('.lines .ln')];
+  for(let i = 0; i < lines.length && talking; i++){
+    lns.forEach((el, j) => el.classList.toggle('turn', j === i));
+    if(lines[i].cue){ msg('Listen…'); await wait(250); await speak(lines[i].cue, 'q'); }
+    if(!talking) break;
+    msg('🎤 Your turn! Say it, then press ✓.');
+    $('#turn').disabled = false; $('#turn').textContent = i === lines.length - 1 ? '✓ Done' : '✓ Next';
+    await new Promise(r => turnDone = r);
+    $('#turn').disabled = true;
+  }
+  await wait(400);
+  const finished = talking; talking = false;
+  if(mediaRec.state === 'recording') mediaRec.stop();
+  await stopped;
+  lns.forEach(el => el.classList.remove('turn'));
+  setTalkUI(false);
+  if(finished) onDone(new Blob(chunks, { type:mediaRec.mimeType || mime || 'audio/webm' }));
+  else msg('Stopped. Press 🎤 to try again.');
+}
+function stopTalk(){ talking = false; if(turnDone){ turnDone(); turnDone = null; } }
+function setTalkUI(on){
+  const rb = $('#rec'); if(!rb) return;
+  rb.classList.toggle('on', on); rb.textContent = on ? '⏹ Stop' : '🎤 Start talking';
+  $('#turnRow').hidden = !on;
+  ['listen', 'mine', 'next', 'back', 'done', 'peek'].forEach(id => { const b = $('#' + id); if(b) b.hidden = on; });
+}
+function msg(t, good){ const m = $('#msg'); if(m){ m.textContent = t; m.classList.toggle('good', !!good); } }
+
+// ---------- screens ----------
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+function stars(){
+  $('#stars').innerHTML = STEPS.map((s, i) => `<span class="${recs[i] ? 'done' : ''}">${s.kind === 'final' ? '🏆' : '⭐'}</span>`).join('');
+}
+function lineHTML(l, opts){
+  const hide = opts.hide, ro = showRo && opts.ro !== false;
+  return `<div class="ln ${opts.isNewHere ? 'new' : ''}">
+    ${l.cue ? `<div class="cue">🔊 ${esc(l.cue)}${ro && l.cueRo ? ` <span style="font-family:Arial,sans-serif;opacity:.8">(${esc(l.cueRo)})</span>` : ''}</div>` : ''}
+    ${hide ? `<div class="blank">・・・</div><div class="en">💬 ${esc(l.en)}</div>` : `<div class="jp">${esc(l.jp)}</div>`}
+    ${!hide && ro && l.ro ? `<div class="ro">${esc(l.ro)}</div>` : ''}
+    ${!hide && opts.en && l.en ? `<div class="en">${esc(l.en)}</div>` : ''}
+  </div>`;
+}
+function itemsFor(lines){ const out = []; lines.forEach(l => { if(l.cue) out.push([l.cue, 'q']); out.push([l.jp, 'a']); }); return out; }
+
+function render(){
+  stars();
+  const c = $('#card');
+  if(at < 0){
+    const noVoice = !synth || !jaVoices.length;
+    c.innerHTML = `<div class="intro">
+      <h2>${esc(DRILL.title)}${DRILL.titleEn ? ' · ' + esc(DRILL.titleEn) : ''}</h2>
+      <p>Learn ${esc(DRILL.goal || 'it')} <b>one sentence at a time</b>. Each time, the sentences add up. At the end you can say it <b>all</b> — and you'll have a recording of it!</p>
+      <ol>
+        <li>Press <b>🔊 Listen</b>.</li>
+        <li>Press <b>🎤 Start talking</b>. Someone asks you a question. Answer out loud, then press <b>✓</b>.</li>
+        <li>Press <b>▶ My recording</b> to hear your conversation. Not happy? Do it again!</li>
+        <li>Press <b>Next ▶</b>. Too hard? Press <b>◀ Back</b> and practise the step before.</li>
+      </ol>
+      ${HAS_RO && RO_UNTIL > 0 ? `<p>The romaji helps you the first ${RO_UNTIL === 1 ? 'time' : RO_UNTIL + ' times'}. <b>After that, it goes away</b> — say it on your own!</p>` : ''}
+      <p style="color:var(--sub)">Your phone will ask to use the microphone — press <b>Allow</b>. Your recordings stay on your phone.</p>
+      ${noVoice ? '<p class="warn">If you can\'t hear the Japanese voice, open this page in Chrome or Safari, and check that your phone\'s volume is up.</p>' : ''}</div>
+      <div class="row"><button class="btn main" id="go">Start ▶</button></div>`;
+    $('#go').onclick = () => go(0);
+    return;
+  }
+  const s = STEPS[at];
+  let head, lines, listen, talkLines;
+  if(s.kind === 'learn'){
+    const l = L[s.k];
+    head = `<p class="step">Sentence ${s.k + 1} of ${L.length}</p><h2>${s.k > 0 ? '✨ New sentence' : 'Say this sentence'}</h2>`;
+    lines = lineHTML(l, { ro:true, en:true, isNewHere:true });
+    listen = itemsFor([l]); talkLines = [l];
+  } else if(s.kind === 'together'){
+    const ls = L.slice(0, s.n);
+    // how many times each sentence has been on screen: its own step (1) + the "together" steps so far
+    const seen = i => i === 0 ? s.n : s.n - i + 1;
+    const roFor = i => RO_UNTIL === 0 || seen(i) <= RO_UNTIL;
+    const noRo = HAS_RO && ls.some((_, i) => !roFor(i));
+    head = `<p class="step">Put it together</p><h2>Now say sentences 1 → ${s.n}</h2>${noRo && showRo ? `<p class="step">No romaji for sentences you have already said ${RO_UNTIL === 1 ? 'once' : RO_UNTIL + ' times'}. You can do it! 💪</p>` : ''}`;
+    lines = ls.map((l, i) => lineHTML(l, { isNewHere:i === s.n - 1, ro:roFor(i) })).join('');
+    listen = itemsFor(ls); talkLines = ls;
+  } else {
+    head = `<p class="step">Last one! 🏆</p><h2>Say it all <u>without looking</u></h2>`;
+    lines = peek ? L.map(l => lineHTML(l, {})).join('') : L.map(l => lineHTML(l, { hide:true })).join('');
+    listen = itemsFor(L); talkLines = L;
+  }
+  const has = !!recs[at];
+  c.innerHTML = `${head}<div class="lines">${lines}</div>
+    <div class="row">
+      <button class="btn" id="listen">🔊 Listen</button>
+      ${s.kind === 'final' ? `<button class="btn" id="peek">${peek ? '🙈 Hide' : '👀 Peek'}</button>` : ''}
+    </div>
+    <div class="row">
+      <button class="btn rec" id="rec">🎤 Start talking</button>
+      <button class="btn" id="mine" ${has ? '' : 'disabled'}>▶ My recording</button>
+    </div>
+    <div class="row" id="turnRow" hidden><button class="btn main" id="turn" disabled>✓ Next</button></div>
+    <p class="msg" id="msg">${has ? 'Recorded ⭐ — listen, or record again.' : ''}</p>
+    <div class="row">
+      ${at > 0 ? '<button class="btn" id="back">◀ Back</button>' : ''}
+      ${s.kind === 'final' ? (has ? '<button class="btn main" id="done">Finish 🏆</button>' : '') : `<button class="btn main" id="next" ${has ? '' : 'disabled'}>Next ▶</button>`}
+    </div>`;
+  $('#listen').onclick = () => play(listen);
+  if($('#peek')) $('#peek').onclick = () => { peek = !peek; render(); };
+  if($('#back')) $('#back').onclick = () => go(at - 1);
+  if($('#next')) $('#next').onclick = () => go(at + 1);
+  if($('#done')) $('#done').onclick = finish;
+  $('#mine').onclick = () => { stopAll(); if(recs[at]){ const a = new Audio(recs[at].url); curAudio = a; a.play(); } };
+  $('#turn').onclick = () => { if(turnDone){ turnDone(); turnDone = null; } };
+  $('#rec').onclick = () => {
+    if(talking){ stopTalk(); return; }
+    const idx = at;
+    talk(talkLines, blob => {
+      if(recs[idx]) URL.revokeObjectURL(recs[idx].url);
+      recs[idx] = { blob, url:URL.createObjectURL(blob) };
+      if(s.kind === 'final') finalRec = recs[idx];
+      if(at !== idx) return stars();
+      render();
+      msg(['Great! ⭐', 'Nice! ⭐', 'すごい！ ⭐', 'Well done! ⭐'][idx % 4], true);
+    });
+  };
+}
+function go(i){ stopAll(); stopTalk(); at = i; peek = false; render(); if(STEPS[at] && STEPS[at].kind === 'learn') play(itemsFor([L[STEPS[at].k]])); }
+
+function finish(){
+  const c = $('#card'), r = finalRec;
+  const ext = (r.blob.type.includes('mp4') ? 'm4a' : r.blob.type.includes('ogg') ? 'ogg' : 'webm');
+  const done = Object.keys(recs).length;
+  c.innerHTML = `<p class="big">🎉</p><h2>よくできました！</h2>
+    <p style="text-align:center">You can say it all in Japanese!<br><span style="color:var(--sub)">${done} of ${STEP_COUNT} recordings done.</span></p>
+    <div class="lines">${L.map(l => lineHTML(l, {})).join('')}</div>
+    <div class="row"><button class="btn main" id="mine">▶ My final conversation</button></div>
+    <div class="row"><a class="btn" id="save" download="my-japanese-practice.${ext}" href="${r.url}">⬇ Save my recording</a></div>
+    <div class="row"><button class="btn" id="again">↺ Practise again</button></div>`;
+  $('#mine').onclick = () => { stopAll(); const a = new Audio(r.url); curAudio = a; a.play(); };
+  $('#again').onclick = () => { recs = {}; finalRec = null; go(0); };
+}
+$('#restart').onclick = () => { stopAll(); stopTalk(); at = -1; render(); };
+render();
+if(synth) synth.addEventListener && synth.addEventListener('voiceschanged', () => { if(at < 0) render(); });
+</script>
+</body>
+</html>
