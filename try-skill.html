@@ -67,7 +67,8 @@ const DRILL = /*DRILL*/{
   "romajiTimes": 2,
   "slots": {
     "Name": {
-      "en": "your name"
+      "en": "your name",
+      "example": "エマ"
     },
     "Country": {
       "en": "your country",
@@ -138,9 +139,11 @@ const isKana = s => /^[぀-ヿ一-鿿ー\s・]+$/.test(s);
 // the value of a blank for one kind of text: 'jp' | 'ro' | 'en' | 'say' (null = leave the blank)
 function slotValue(name, kind){
   const v = vals[name], sl = SLOTS[name] || {};
-  if(!v) return null;
-  if(sl.choices){ const c = sl.choices[+v]; if(!c) return null; return kind === 'say' ? c.jp : (c[kind] || c.jp); }
-  if(kind === 'say') return isKana(v) ? v : null;  // a Japanese voice can't read a name typed in English letters
+  // the voice reads an example word for an empty blank, so the sentence sounds whole
+  const example = sl.example || (sl.choices && sl.choices[0] && sl.choices[0].jp) || null;
+  if(!v) return kind === 'say' ? example : null;
+  if(sl.choices){ const c = sl.choices[+v]; if(!c) return kind === 'say' ? example : null; return kind === 'say' ? c.jp : (c[kind] || c.jp); }
+  if(kind === 'say') return isKana(v) ? v : example;  // a Japanese voice can't read a name typed in English letters
   return v;
 }
 // text with blanks → safe HTML
@@ -246,10 +249,13 @@ function pickMime(){
 }
 async function setupRec(){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || pickMime() === null){ msg('Recording does not work here. Try Chrome or Safari on your phone.'); return false; }
-  try { stream = stream || await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:true } }); }
+  // open the microphone fresh for every recording: on phones, the speaking voice or playing a recording can stop a microphone that was opened earlier
+  closeMic();
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:true } }); }
   catch(e){ msg('Please allow the microphone, then press 🎤 again.'); return false; }
   return true;
 }
+function closeMic(){ if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; } }
 async function talk(lines, onDone){
   stopAll();
   if(!await setupRec()) return;
@@ -272,9 +278,12 @@ async function talk(lines, onDone){
   const finished = talking; talking = false;
   if(mediaRec.state === 'recording') mediaRec.stop();
   await stopped;
+  closeMic();
   lns.forEach(el => el.classList.remove('turn'));
   setTalkUI(false);
-  if(finished) onDone(new Blob(chunks, { type:mediaRec.mimeType || mime || 'audio/webm' }));
+  const blob = new Blob(chunks, { type:mediaRec.mimeType || mime || 'audio/webm' });
+  if(finished && blob.size < 2000) msg('The recording didn\'t work. Press 🎤 and try again.');
+  else if(finished) onDone(blob);
   else msg('Stopped. Press 🎤 to try again.');
 }
 function stopTalk(){ talking = false; if(turnDone){ turnDone(); turnDone = null; } }
